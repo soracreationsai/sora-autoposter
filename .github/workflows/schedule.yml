@@ -21,7 +21,7 @@ jobs:
           pip install -r requirements.txt
           # Install Playwright browsers (this takes a bit)
           playwright install --with-deps
-
+          pip install cryptography
       - name: Run poster
         env:
           GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
