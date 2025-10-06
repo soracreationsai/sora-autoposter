@@ -1,0 +1,33 @@
+name: Scheduled TikTok Poster
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # runs every 5 minutes
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Install Playwright browsers (this takes a bit)
+          playwright install --with-deps
+
+      - name: Run poster
+        env:
+          GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          TIKTOK_STORAGE: ${{ secrets.TIKTOK_STORAGE }}
+          CAPTION: ${{ secrets.CAPTION }}
+          TIME_ZONE: 'America/New_York'
+        run: python post_if_due.py
