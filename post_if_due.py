@@ -6,7 +6,6 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-import base64
 from cryptography.fernet import Fernet
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -15,13 +14,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 GCP_SA_JSON = os.environ.get("GCP_SA_JSON")
 DRIVE_FOLDER_ID = os.environ.get("DRIVE_FOLDER_ID")
 SHEET_ID = os.environ.get("SHEET_ID")
-TIKTOK_STORAGE = os.environ.get("TIKTOK_STORAGE")
 CAPTION = os.environ.get("CAPTION", "✨ Made with AI | #SoraCreations #AI")
 TIME_ZONE = os.environ.get("TIME_ZONE", "America/New_York")
 TOLERANCE_SECONDS = int(os.environ.get("TOLERANCE_SECONDS", "150"))  # 2.5 minutes
 
-if not (GCP_SA_JSON and DRIVE_FOLDER_ID and SHEET_ID and TIKTOK_STORAGE):
-    logging.error("Missing one of required env vars: GCP_SA_JSON, DRIVE_FOLDER_ID, SHEET_ID, TIKTOK_STORAGE")
+if not (GCP_SA_JSON and DRIVE_FOLDER_ID and SHEET_ID):
+    logging.error("Missing one of required env vars: GCP_SA_JSON, DRIVE_FOLDER_ID, SHEET_ID")
     raise SystemExit(1)
 
 sa_info = json.loads(GCP_SA_JSON)
@@ -97,29 +95,27 @@ def is_time_to_post(schedule):
     return False, None
 
 def upload_to_tiktok(video_path, caption_text):
-import base64  # Add this import at the top if not there (after other imports)
-from cryptography.fernet import Fernet  # Add this too (after other imports)
+    # Decrypt storage state
+    encrypted_path = "tiktok_storage.enc"
+    passphrase_b64 = os.environ.get("ENCRYPTED_PASSPHRASE")
+    storage_path = "/tmp/tiktok_storage.json"
+    if passphrase_b64:
+        try:
+            key = base64.urlsafe_b64decode(passphrase_b64)
+            f = Fernet(key)
+            with open(encrypted_path, "rb") as enc_file:
+                encrypted = enc_file.read()
+            decrypted = f.decrypt(encrypted).decode()
+            with open(storage_path, "w", encoding="utf-8") as out:
+                out.write(decrypted)
+            logging.info("Decrypted storage state successfully.")
+        except Exception as e:
+            logging.error(f"Decryption failed: {e}")
+            return False, "decryption_error"
+    else:
+        logging.error("No ENCRYPTED_PASSPHRASE secret found.")
+        return False, "no_passphrase"
 
-# ... (in the function, replace the write block with:)
-encrypted_path = "tiktok_storage.enc"
-passphrase_b64 = os.environ.get("ENCRYPTED_PASSPHRASE")
-storage_path = "/tmp/tiktok_storage.json"
-if passphrase_b64:
-    try:
-        key = base64.urlsafe_b64decode(passphrase_b64)
-        f = Fernet(key)
-        with open(encrypted_path, "rb") as enc_file:
-            encrypted = enc_file.read()
-        decrypted = f.decrypt(encrypted).decode()
-        with open(storage_path, "w", encoding="utf-8") as out:
-            out.write(decrypted)
-        logging.info("Decrypted storage state successfully.")
-    except Exception as e:
-        logging.error(f"Decryption failed: {e}")
-        return False, "decryption_error"
-else:
-    logging.error("No ENCRYPTED_PASSPHRASE secret found.")
-    return False, "no_passphrase"
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(storage_state=storage_path)
